@@ -16,4 +16,12 @@ MonoBehaviour:
   - Path: Assets/NeedleScene.unity
     Projects: []
     BuilderScene: 
-  Projects: []
+  - Path: Assets/Samples/Needle Engine/Sandbox.unity
+    Projects:
+    - ProjectPath: Library/Needle/Sample
+    BuilderScene: 
+  - Path: Assets/Scenes/SampleScene.unity
+    Projects: []
+    BuilderScene: 
+  Projects:
+  - ProjectPath: Library/Needle/Sample
