@@ -6,13 +6,9 @@ import * as path from "path";
 // ------------------------------------------------------------------------------------------
 // Retrieve API keys from gitIgnored apiKeys.json to allow safe GIT pushing
 // ------------------------------------------------------------------------------------------
-// Resolve the path to the JSON file relative to the current file
 const apiKeysPath = path.resolve(__dirname, '../src/apiKeys.json');
-
-// Read the JSON file synchronously
 const apiKeys = JSON.parse(fs.readFileSync(apiKeysPath, 'utf8'));
 
-// Access the API keys
 const stabilityAIKey: string = apiKeys.StabilityAI;
 const openAIKey: string = apiKeys.OpenAI;
 
@@ -21,43 +17,80 @@ console.log('StabilityAI Key:', stabilityAIKey);
 console.log('OpenAI Key:', openAIKey);
 // ------------------------------------------------------------------------------------------
 
-// Load system prompt from a .txt file
-const systemPromptPath = path.resolve(__dirname, '../src/system-prompt.txt');
-const systemPrompt = fs.readFileSync(systemPromptPath, 'utf8');
+const promptModifierImagePath = path.resolve(__dirname, '../src/promptModifier_ImageGenerator.txt');
+const promptModifierImage = fs.readFileSync(promptModifierImagePath, 'utf8');
 
 // Function to sanitize file name
 function sanitizeFileName(input: string): string {
     return input.trim().replace(/[^a-zA-Z0-9]/g, '_').substring(0, 20);
 }
 
-// Function to generate an image from a prompt
+// Function to optimize prompt using OpenAI API
+async function optimizePrompt(inputPrompt: string, modifier: string): Promise<string> {
+    const apiUrl = "https://api.openai.com/v1/chat/completions";
+    try {
+        const response = await axios.post(
+            apiUrl,
+            {
+                model: "gpt-4",
+                messages: [
+                    { role: "system", content: modifier },
+                    { role: "user", content: inputPrompt }
+                ],
+                max_tokens: 100,
+                temperature: 0.7,
+            },
+            {
+                headers: {
+                    Authorization: `Bearer ${openAIKey}`,
+                    "Content-Type": "application/json",
+                },
+            }
+        );
+
+        if (response.status === 200) {
+            const optimizedPrompt = response.data.choices[0].message.content.trim();
+            console.log(`Optimized Prompt: ${optimizedPrompt}`);
+            return optimizedPrompt;
+        } else {
+            console.error(`OpenAI API call failed with status: ${response.status}`);
+            throw new Error(response.data.error.message || "Unknown error occurred");
+        }
+    } catch (error) {
+        console.error("Error optimizing prompt:", error);
+        throw error;
+    }
+}
+
+// Function to generate an image (now .png instead of .webp)
 async function generateImage(prompt: string): Promise<string> {
     const apiUrl = "https://api.stability.ai/v2beta/stable-image/generate/core";
 
-    // Combine system prompt and user prompt
-    const fullPrompt = `${systemPrompt.trim()} ${prompt}`;
-
-    // Set up the form data for the image generation request
-    const formData = new FormData();
-    formData.append("prompt", fullPrompt);
-    formData.append("width", "512");
-    formData.append("height", "512");
-    formData.append("output_format", "png"); // Specify desired image format
+    // Optimize the prompt using OpenAI API
+    const optimizedPrompt = await optimizePrompt(prompt, promptModifierImage);
 
     const startTime = Date.now();
-
     try {
-        // Make the POST request to the Stability AI image generation API
+        // Prepare form data
+        const payload = {
+            prompt: optimizedPrompt,
+            output_format: "png"
+        };
+        const formData = new FormData();
+        for (const [key, value] of Object.entries(payload)) {
+            formData.append(key, value);
+        }
+
+        // Post to Stability AI using multipart/form-data
         const response = await axios.post(apiUrl, formData, {
             headers: {
                 Authorization: `Bearer ${stabilityAIKey}`,
                 Accept: "image/*",
                 ...formData.getHeaders(),
             },
-            responseType: "arraybuffer", // Expect a binary image response
+            responseType: "arraybuffer",
         });
 
-        // Check if the response is successful
         if (response.status === 200) {
             const sanitizedFileName = `gen_${sanitizeFileName(prompt)}.png`;
             const imagePath = path.resolve(__dirname, sanitizedFileName);
@@ -65,8 +98,7 @@ async function generateImage(prompt: string): Promise<string> {
 
             const elapsedTime = (Date.now() - startTime) / 1000;
             console.log(`Image generated successfully at: ${imagePath} (Elapsed Time: ${elapsedTime}s)`);
-
-            return imagePath; // Return the path to the generated image
+            return imagePath;
         } else {
             throw new Error(`Image generation failed: ${response.status} - ${response.data.toString()}`);
         }
@@ -76,19 +108,18 @@ async function generateImage(prompt: string): Promise<string> {
     }
 }
 
-// Function to generate a 3D model from an image
+// Function to generate a 3D model from an image (new endpoint + debug logs)
 export async function generate3DModel(prompt: string): Promise<string> {
     const apiUrl = "https://api.stability.ai/v2beta/3d/stable-fast-3d";
 
     const startTime = Date.now();
-
     try {
         // Generate the image first
         const inputImageStartTime = Date.now();
         const inputImagePath = await generateImage(prompt);
         const inputImageElapsedTime = (Date.now() - inputImageStartTime) / 1000;
 
-        // Ensure the image path is passed correctly
+        // Ensure the image path is correct
         console.log(`Using generated image: ${inputImagePath}`);
 
         // Set up the form data for the 3D model generation request
@@ -132,8 +163,9 @@ export async function generate3DModel(prompt: string): Promise<string> {
 
 // TESTING - Auto Generate Model
 (async () => {
+    const inputPrompt = process.argv[2] || "a friendly squirrel with a yellow hat and red sunglasses. it smiles nicely and is very (!!!) cute.";
     try {
-        const modelPath = await generate3DModel("a friendly squirrel with a yellow hat and red sunglasses. it smiles nicely and is very (!!!) cute.");
+        const modelPath = await generate3DModel(inputPrompt);
         console.log(`3D Model saved at: ${modelPath}`);
     } catch (error) {
         console.error("Failed to generate 3D model:", error);
