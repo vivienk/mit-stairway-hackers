@@ -7,9 +7,8 @@ namespace Needle.Typescript.GeneratedComponents
 {
 	public partial class SpawnObjectOnInteraction : UnityEngine.MonoBehaviour
 	{
-		public string @myStringField = "Hello World";
-		public UnityEngine.UI.Button @debugButton;
 		public void start(){}
+		public void spawnObject(){}
 	}
 }
 
