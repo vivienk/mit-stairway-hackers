@@ -23,5 +23,9 @@ MonoBehaviour:
   - Path: Assets/Scenes/SampleScene.unity
     Projects: []
     BuilderScene: 
+  - Path: Assets/MainLevel.unity
+    Projects:
+    - ProjectPath: Library/Needle/Sample
+    BuilderScene: 
   Projects:
   - ProjectPath: Library/Needle/Sample
